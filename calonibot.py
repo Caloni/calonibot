@@ -16,6 +16,7 @@ import urllib.request
 import re
 import argparse
 import feedparser
+import os
 
 update_id = None
 thumb_url_sample = "http://caloni.com.br/images/caloni.png"
@@ -92,7 +93,6 @@ def main():
 
     global rss_cache
     argparser = argparse.ArgumentParser('Caloni BOT')
-    argparser.add_argument('--auth', help="Telegram authorization token.")
     argparser.add_argument('--rss', help="RSS file to search.")
     argparser.add_argument('--find-post', help="Find single post test.")
     params = argparser.parse_args()
@@ -113,7 +113,7 @@ def main():
     global update_id
     global response
     # Telegram Bot Authorization Token
-    bot = telegram.Bot(params.auth)
+    bot = telegram.Bot(token=os.environ["TOKEN"])
 
     # get the first pending update_id, this is so we can skip over it in case
     # we get an "Unauthorized" exception.

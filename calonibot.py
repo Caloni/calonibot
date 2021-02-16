@@ -4,34 +4,6 @@
 
 author Wanderley Caloni <wanderley.caloni@gmail.com>
 date 2020-06
-
-If you want to install it as a Ubuntu/raspberry service do as follows.
-
-1. Create a file named calonibot.service with the content bellow.
-
-```
-[Service]
-WorkingDirectory=/var/usr/calonibot
-ExecStart=/usr/bin/python3 /var/usr/calonibot/calonibot.py
-Restart=always
-StandardOutput=syslog
-StandardError=syslog
-SyslogIdentifier=calonibot
-User=root
-Group=root
-Environment=NODE_ENV=production
-[Install]
-WantedBy=multi-user.target
-```
-
-2. Keep the working directory for this repo writable for the user that is
-going to use it as a service.
-
-3. You are done.
-
-Obs.: this script is going to update itself from time to time in order to
-catch the lastest commits and search for newer posts properly. So take care
-of keep its source conflict free.
 """
 import sys
 import logging
@@ -41,13 +13,13 @@ from telegram import InlineQueryResultArticle
 import xml.etree.ElementTree as ET
 from time import sleep
 import urllib.request
-from git import Repo
-import json
 import re
 import argparse
+import feedparser
 
 update_id = None
 thumb_url_sample = "http://caloni.com.br/images/caloni.png"
+rss_cache = None
 
 response_sample = [
 
@@ -65,21 +37,29 @@ response_sample = [
 ]
 
 
-def request_posts(path):
-    tree = ET.parse(path) if path else None
-    return tree
+def request_posts(path, cache=None):
+    if path.find('http') == 0:
+        data = feedparser.parse(path, etag=cache['headers']['etag']) if cache else feedparser.parse(path)
+        if len(data['entries']) > 0:
+            cache = data
+    else:
+        if cache:
+          cache['entries'] = ET.parse(path)
+        else:
+          cache = { 'entries': ET.parse(path) }
+    return cache
 
 
-def find_posts(regex, root):
+def find_posts(regex, entries=None):
     lastLink = None
     links = []
 
     counter = 1
-    if root:
-        for item in root.iter('item'):
-            title = item.find('title').text
-            desc = item.find('description').text
-            link = item.find('link').text
+    if entries:
+        for entry in entries:
+            title = entry['title']
+            desc = entry['description']
+            link = entry['link']
             mt = re.search(regex, title, flags=re.I) 
             md = desc if desc == None else re.search(regex, desc, flags=re.I) 
             if mt or md:
@@ -96,35 +76,30 @@ def find_posts(regex, root):
 def echo(params, bot):
     """Echo the message the user sent."""
     global update_id
-    if params.repo:
-        try:
-            repo = Repo(params.repo)
-            repo.remotes[0].pull("master")
-        except Exception as e:
-            print("exception trying to pull repo " + params.repo + ": " + str(e))
+    global rss_cache
     # Request updates after the last update_id
     for update in bot.get_updates(offset=update_id, timeout=10):
         update_id = update.update_id + 1
 
         if update.inline_query:
             regex = update.inline_query['query']
-            posts = request_posts(params.rss)
-            response = find_posts(regex, posts)
+            rss_cache = request_posts(params.rss, rss_cache)
+            response = find_posts(regex, rss_cache['entries'])
             update.inline_query.answer(response)
 
 
 def main():
 
+    global rss_cache
     argparser = argparse.ArgumentParser('Caloni BOT')
     argparser.add_argument('--auth', help="Telegram authorization token.")
     argparser.add_argument('--rss', help="RSS file to search.")
-    argparser.add_argument('--repo', help="Git repo working dir; update it if provided.")
     argparser.add_argument('--find-post', help="Find single post test.")
     params = argparser.parse_args()
 
     if params.find_post:
-        lines = request_posts(params.rss)
-        resp = find_posts(params.find_post, lines)
+        rss_cache = request_posts(params.rss)
+        resp = find_posts(params.find_post, rss_cache['entries'])
         for r in resp:
             print(r)
         return

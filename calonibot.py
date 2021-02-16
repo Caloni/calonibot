@@ -84,7 +84,7 @@ def echo(params, bot):
 
         if update.inline_query:
             regex = update.inline_query['query']
-            rss_cache = request_posts(params.rss, rss_cache)
+            rss_cache = request_posts(os.environ["RSS"], rss_cache)
             response = find_posts(regex, rss_cache['entries'])
             update.inline_query.answer(response)
 
@@ -93,12 +93,11 @@ def main():
 
     global rss_cache
     argparser = argparse.ArgumentParser('Caloni BOT')
-    argparser.add_argument('--rss', help="RSS file to search.")
     argparser.add_argument('--find-post', help="Find single post test.")
     params = argparser.parse_args()
 
     if params.find_post:
-        rss_cache = request_posts(params.rss)
+        rss_cache = request_posts(os.environ["RSS"])
         resp = find_posts(params.find_post, rss_cache['entries'])
         for r in resp:
             print(r)

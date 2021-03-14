@@ -17,10 +17,12 @@ import re
 import argparse
 import feedparser
 import os
+import datetime
 
 update_id = None
 thumb_url_sample = "http://caloni.com.br/images/caloni.png"
 rss_cache = None
+rss_cache_dt = datetime.datetime.now()
 
 response_sample = [
 
@@ -78,13 +80,16 @@ def echo(params, bot):
     """Echo the message the user sent."""
     global update_id
     global rss_cache
+    global rss_cache_dt
     # Request updates after the last update_id
     for update in bot.get_updates(offset=update_id, timeout=10):
         update_id = update.update_id + 1
 
         if update.inline_query:
             regex = update.inline_query['query']
-            rss_cache = request_posts(os.environ["RSS"], rss_cache)
+            if rss_cache == None or (datetime.datetime.now() - rss_cache_dt).seconds > 300:
+              rss_cache = request_posts(os.environ["RSS"], rss_cache)
+              rss_cache_dt = datetime.datetime.now()
             response = find_posts(regex, rss_cache['entries'])
             update.inline_query.answer(response)
 

@@ -80,16 +80,12 @@ def echo(params, bot):
     """Echo the message the user sent."""
     global update_id
     global rss_cache
-    global rss_cache_dt
     # Request updates after the last update_id
     for update in bot.get_updates(offset=update_id, timeout=10):
         update_id = update.update_id + 1
 
         if update.inline_query:
             regex = update.inline_query['query']
-            if rss_cache == None or (datetime.datetime.now() - rss_cache_dt).seconds > 300:
-              rss_cache = request_posts(os.environ["RSS"], rss_cache)
-              rss_cache_dt = datetime.datetime.now()
             response = find_posts(regex, rss_cache['entries'])
             update.inline_query.answer(response)
 
@@ -97,6 +93,7 @@ def echo(params, bot):
 def main():
 
     global rss_cache
+    global rss_cache_dt
     argparser = argparse.ArgumentParser('Caloni BOT')
     argparser.add_argument('--find-post', help="Find single post test.")
     params = argparser.parse_args()
@@ -113,14 +110,13 @@ def main():
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger.setLevel(logging.DEBUG)
 
-    """Run the bot."""
+    logger.debug("Run the bot.")
     global update_id
     global response
     # Telegram Bot Authorization Token
     bot = telegram.Bot(token=os.environ["TOKEN"])
 
-    # get the first pending update_id, this is so we can skip over it in case
-    # we get an "Unauthorized" exception.
+    logger.debug("getting the first pending update_id to test for an \"Unauthorized\" exception")
     try:
         update_id = bot.get_updates()[0].update_id
     except IndexError:
@@ -128,13 +124,21 @@ def main():
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
+    logger.debug("entering bot loop")
     while True:
         try:
+            if rss_cache == None or (datetime.datetime.now() - rss_cache_dt).seconds > 300:
+              logger.debug("updating rss_cache")
+              rss_cache = request_posts(os.environ["RSS"], rss_cache)
+              rss_cache_dt = datetime.datetime.now()
+              logger.debug("finished updating rss_cache")
+            logger.debug("echoing")
             echo(params, bot)
         except NetworkError:
+            logger.debug("network error; sleeping for 1 sec")
             sleep(1)
         except Unauthorized:
-            # The user has removed or blocked the bot.
+            logger.debug("unauthorized (the user has removed or blocked the bot)")
             update_id += 1
 
 
